@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStationReservations = exports.completeChargingSession = exports.startChargingSession = exports.confirmReservation = exports.cancelReservation = exports.updateReservation = exports.createReservation = exports.getReservationById = exports.getUserReservations = void 0;
+exports.getAllReservations = exports.getReservationAnalytics = exports.getActiveReservations = exports.checkAvailability = exports.getStationReservations = exports.completeChargingSession = exports.startChargingSession = exports.confirmReservation = exports.cancelReservation = exports.updateReservation = exports.createReservation = exports.getReservationById = exports.getUserReservations = void 0;
 const express_validator_1 = require("express-validator");
 const Reservation_1 = __importDefault(require("../models/Reservation"));
 const ChargingStation_1 = __importDefault(require("../models/ChargingStation"));
@@ -312,4 +312,224 @@ const getStationReservations = async (req, res) => {
     }
 };
 exports.getStationReservations = getStationReservations;
+const checkAvailability = async (req, res) => {
+    try {
+        const { stationId, connectorType, startTime, endTime } = req.query;
+        if (!stationId || !connectorType || !startTime || !endTime) {
+            (0, response_1.sendError)(res, 'Missing required parameters: stationId, connectorType, startTime, endTime', 400);
+            return;
+        }
+        const station = await ChargingStation_1.default.findById(stationId);
+        if (!station || station.status !== 'active') {
+            (0, response_1.sendError)(res, 'Charging station not available', 404);
+            return;
+        }
+        const connector = station.connectorTypes.find(c => c.type === connectorType);
+        if (!connector) {
+            (0, response_1.sendError)(res, 'Connector type not available at this station', 400);
+            return;
+        }
+        const overlappingReservations = await Reservation_1.default.findOverlapping(stationId, connectorType, new Date(startTime), new Date(endTime));
+        const availableConnectors = connector.count - overlappingReservations.length;
+        const isAvailable = availableConnectors > 0;
+        const availabilityData = {
+            isAvailable,
+            totalConnectors: connector.count,
+            availableConnectors,
+            reservedConnectors: overlappingReservations.length,
+            conflictingReservations: overlappingReservations.map((r) => ({
+                id: r._id,
+                startTime: r.startTime,
+                endTime: r.endTime,
+                status: r.status
+            }))
+        };
+        (0, response_1.sendSuccess)(res, 'Availability checked successfully', availabilityData);
+    }
+    catch (error) {
+        console.error('Error checking availability:', error);
+        (0, response_1.sendError)(res, 'Failed to check availability');
+    }
+};
+exports.checkAvailability = checkAvailability;
+const getActiveReservations = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const now = new Date();
+        const [activeReservations, upcomingReservations] = await Promise.all([
+            Reservation_1.default.find({
+                userId,
+                status: 'active',
+                startTime: { $lte: now },
+                endTime: { $gte: now }
+            }).populate('stationId', 'name address location connectorTypes'),
+            Reservation_1.default.find({
+                userId,
+                status: { $in: ['confirmed', 'pending'] },
+                startTime: { $gt: now }
+            }).populate('stationId', 'name address location connectorTypes')
+                .sort({ startTime: 1 })
+                .limit(5)
+        ]);
+        const responseData = {
+            active: activeReservations,
+            upcoming: upcomingReservations,
+            counts: {
+                active: activeReservations.length,
+                upcoming: upcomingReservations.length
+            }
+        };
+        (0, response_1.sendSuccess)(res, 'Active reservations retrieved successfully', responseData);
+    }
+    catch (error) {
+        console.error('Error fetching active reservations:', error);
+        (0, response_1.sendError)(res, 'Failed to fetch active reservations');
+    }
+};
+exports.getActiveReservations = getActiveReservations;
+const getReservationAnalytics = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const { period = '30' } = req.query;
+        const periodDays = parseInt(period);
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - periodDays);
+        const [totalReservations, completedReservations, cancelledReservations, totalSpent, reservationsByStatus, reservationsByConnectorType, recentActivity] = await Promise.all([
+            Reservation_1.default.countDocuments({
+                userId,
+                createdAt: { $gte: startDate }
+            }),
+            Reservation_1.default.countDocuments({
+                userId,
+                status: 'completed',
+                createdAt: { $gte: startDate }
+            }),
+            Reservation_1.default.countDocuments({
+                userId,
+                status: 'cancelled',
+                createdAt: { $gte: startDate }
+            }),
+            Reservation_1.default.aggregate([
+                {
+                    $match: {
+                        userId: userId,
+                        status: 'completed',
+                        createdAt: { $gte: startDate }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: '$estimatedCost' }
+                    }
+                }
+            ]),
+            Reservation_1.default.aggregate([
+                {
+                    $match: {
+                        userId: userId,
+                        createdAt: { $gte: startDate }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]),
+            Reservation_1.default.aggregate([
+                {
+                    $match: {
+                        userId: userId,
+                        createdAt: { $gte: startDate }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$connectorType',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]),
+            Reservation_1.default.find({
+                userId,
+                createdAt: { $gte: startDate }
+            })
+                .populate('stationId', 'name address')
+                .sort({ createdAt: -1 })
+                .limit(10)
+        ]);
+        const analytics = {
+            period: `${periodDays} days`,
+            summary: {
+                totalReservations,
+                completedReservations,
+                cancelledReservations,
+                completionRate: totalReservations > 0 ? (completedReservations / totalReservations * 100).toFixed(1) : 0,
+                totalSpent: totalSpent[0]?.total || 0,
+                averageSpent: completedReservations > 0 ? ((totalSpent[0]?.total || 0) / completedReservations).toFixed(2) : 0
+            },
+            breakdown: {
+                byStatus: reservationsByStatus.reduce((acc, item) => {
+                    acc[item._id] = item.count;
+                    return acc;
+                }, {}),
+                byConnectorType: reservationsByConnectorType.reduce((acc, item) => {
+                    acc[item._id] = item.count;
+                    return acc;
+                }, {})
+            },
+            recentActivity
+        };
+        (0, response_1.sendSuccess)(res, 'Reservation analytics retrieved successfully', analytics);
+    }
+    catch (error) {
+        console.error('Error fetching reservation analytics:', error);
+        (0, response_1.sendError)(res, 'Failed to fetch reservation analytics');
+    }
+};
+exports.getReservationAnalytics = getReservationAnalytics;
+const getAllReservations = async (req, res) => {
+    try {
+        const { status, stationId, userId: filterUserId, connectorType, startDate, endDate, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+        const query = {};
+        if (status)
+            query.status = status;
+        if (stationId)
+            query.stationId = stationId;
+        if (filterUserId)
+            query.userId = filterUserId;
+        if (connectorType)
+            query.connectorType = connectorType;
+        if (startDate || endDate) {
+            query.startTime = {};
+            if (startDate)
+                query.startTime.$gte = new Date(startDate);
+            if (endDate)
+                query.startTime.$lte = new Date(endDate);
+        }
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const sort = {};
+        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+        const [reservations, total] = await Promise.all([
+            Reservation_1.default.find(query)
+                .populate('userId', 'name email')
+                .populate('stationId', 'name address location')
+                .sort(sort)
+                .skip(skip)
+                .limit(limitNum),
+            Reservation_1.default.countDocuments(query)
+        ]);
+        const pagination = (0, response_1.calculatePagination)(pageNum, limitNum, total);
+        (0, response_1.sendSuccess)(res, 'All reservations retrieved successfully', reservations, 200, pagination);
+    }
+    catch (error) {
+        console.error('Error fetching all reservations:', error);
+        (0, response_1.sendError)(res, 'Failed to fetch reservations');
+    }
+};
+exports.getAllReservations = getAllReservations;
 //# sourceMappingURL=reservationController.js.map

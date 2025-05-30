@@ -96,11 +96,13 @@ app.use((err, req, res, next) => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
     console.log(`🚀 EV Finder API server running on port ${PORT}`);
     console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    console.log(`🌐 Network access: http://192.168.1.91:${PORT}/health`);
 });
 exports.default = app;
 //# sourceMappingURL=index.js.map

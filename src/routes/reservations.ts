@@ -9,7 +9,11 @@ import {
   confirmReservation,
   startChargingSession,
   completeChargingSession,
-  getStationReservations
+  getStationReservations,
+  checkAvailability,
+  getActiveReservations,
+  getReservationAnalytics,
+  getAllReservations
 } from '../controllers/reservationController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -51,8 +55,40 @@ const queryValidation = [
   query('date').optional().isISO8601().withMessage('Invalid date format')
 ];
 
+const availabilityValidation = [
+  query('stationId').isMongoId().withMessage('Invalid station ID'),
+  query('connectorType').isIn(['CCS', 'CHAdeMO', 'Type2', 'Tesla', 'J1772']).withMessage('Invalid connector type'),
+  query('startTime').isISO8601().withMessage('Invalid start time format'),
+  query('endTime').isISO8601().withMessage('Invalid end time format')
+];
+
+const analyticsValidation = [
+  query('period').optional().isInt({ min: 1, max: 365 }).withMessage('Period must be between 1 and 365 days')
+];
+
+const adminQueryValidation = [
+  query('status').optional().isIn(['pending', 'confirmed', 'active', 'completed', 'cancelled']).withMessage('Invalid status'),
+  query('stationId').optional().isMongoId().withMessage('Invalid station ID'),
+  query('userId').optional().isMongoId().withMessage('Invalid user ID'),
+  query('connectorType').optional().isIn(['CCS', 'CHAdeMO', 'Type2', 'Tesla', 'J1772']).withMessage('Invalid connector type'),
+  query('startDate').optional().isISO8601().withMessage('Invalid start date format'),
+  query('endDate').optional().isISO8601().withMessage('Invalid end date format'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be at least 1'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query('sortBy').optional().isIn(['createdAt', 'startTime', 'endTime', 'status', 'estimatedCost']).withMessage('Invalid sort field'),
+  query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Sort order must be asc or desc')
+];
+
 // All routes require authentication
 router.use(authenticateToken);
+
+// Utility routes
+router.get('/availability', availabilityValidation, checkAvailability);
+router.get('/active', getActiveReservations);
+router.get('/analytics', analyticsValidation, getReservationAnalytics);
+
+// Admin routes (should be protected with admin middleware in production)
+router.get('/admin/all', adminQueryValidation, getAllReservations);
 
 // User reservation routes
 router.get('/', queryValidation, getUserReservations);

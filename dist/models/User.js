@@ -38,8 +38,7 @@ const UserSchema = new mongoose_1.Schema({
     auth0Id: {
         type: String,
         required: true,
-        unique: true,
-        index: true
+        unique: true
     },
     email: {
         type: String,

@@ -400,4 +400,283 @@ export const getStationReservations = async (req: AuthenticatedRequest, res: Res
     console.error('Error fetching station reservations:', error);
     sendError(res, 'Failed to fetch station reservations');
   }
+};
+
+// Check availability for a time slot
+export const checkAvailability = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { stationId, connectorType, startTime, endTime } = req.query as any;
+
+    if (!stationId || !connectorType || !startTime || !endTime) {
+      sendError(res, 'Missing required parameters: stationId, connectorType, startTime, endTime', 400);
+      return;
+    }
+
+    // Validate station exists
+    const station = await ChargingStation.findById(stationId);
+    if (!station || station.status !== 'active') {
+      sendError(res, 'Charging station not available', 404);
+      return;
+    }
+
+    // Validate connector type
+    const connector = station.connectorTypes.find(c => c.type === connectorType);
+    if (!connector) {
+      sendError(res, 'Connector type not available at this station', 400);
+      return;
+    }
+
+    // Check for overlapping reservations
+    const overlappingReservations = await (Reservation as any).findOverlapping(
+      stationId,
+      connectorType,
+      new Date(startTime),
+      new Date(endTime)
+    );
+
+    const availableConnectors = connector.count - overlappingReservations.length;
+    const isAvailable = availableConnectors > 0;
+
+    const availabilityData = {
+      isAvailable,
+      totalConnectors: connector.count,
+      availableConnectors,
+      reservedConnectors: overlappingReservations.length,
+      conflictingReservations: overlappingReservations.map((r: any) => ({
+        id: r._id,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        status: r.status
+      }))
+    };
+
+    sendSuccess(res, 'Availability checked successfully', availabilityData);
+  } catch (error) {
+    console.error('Error checking availability:', error);
+    sendError(res, 'Failed to check availability');
+  }
+};
+
+// Get user's active and upcoming reservations
+export const getActiveReservations = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.user!;
+    const now = new Date();
+
+    const [activeReservations, upcomingReservations] = await Promise.all([
+      Reservation.find({
+        userId,
+        status: 'active',
+        startTime: { $lte: now },
+        endTime: { $gte: now }
+      }).populate('stationId', 'name address location connectorTypes'),
+      
+      Reservation.find({
+        userId,
+        status: { $in: ['confirmed', 'pending'] },
+        startTime: { $gt: now }
+      }).populate('stationId', 'name address location connectorTypes')
+        .sort({ startTime: 1 })
+        .limit(5)
+    ]);
+
+    const responseData = {
+      active: activeReservations,
+      upcoming: upcomingReservations,
+      counts: {
+        active: activeReservations.length,
+        upcoming: upcomingReservations.length
+      }
+    };
+
+    sendSuccess(res, 'Active reservations retrieved successfully', responseData);
+  } catch (error) {
+    console.error('Error fetching active reservations:', error);
+    sendError(res, 'Failed to fetch active reservations');
+  }
+};
+
+// Get reservation analytics for user
+export const getReservationAnalytics = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.user!;
+    const { period = '30' } = req.query as any; // days
+
+    const periodDays = parseInt(period);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+
+    const [
+      totalReservations,
+      completedReservations,
+      cancelledReservations,
+      totalSpent,
+      reservationsByStatus,
+      reservationsByConnectorType,
+      recentActivity
+    ] = await Promise.all([
+      // Total reservations in period
+      Reservation.countDocuments({
+        userId,
+        createdAt: { $gte: startDate }
+      }),
+      
+      // Completed reservations
+      Reservation.countDocuments({
+        userId,
+        status: 'completed',
+        createdAt: { $gte: startDate }
+      }),
+      
+      // Cancelled reservations
+      Reservation.countDocuments({
+        userId,
+        status: 'cancelled',
+        createdAt: { $gte: startDate }
+      }),
+      
+      // Total amount spent
+      Reservation.aggregate([
+        {
+          $match: {
+            userId: userId,
+            status: 'completed',
+            createdAt: { $gte: startDate }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$estimatedCost' }
+          }
+        }
+      ]),
+      
+      // Reservations by status
+      Reservation.aggregate([
+        {
+          $match: {
+            userId: userId,
+            createdAt: { $gte: startDate }
+          }
+        },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // Reservations by connector type
+      Reservation.aggregate([
+        {
+          $match: {
+            userId: userId,
+            createdAt: { $gte: startDate }
+          }
+        },
+        {
+          $group: {
+            _id: '$connectorType',
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // Recent activity
+      Reservation.find({
+        userId,
+        createdAt: { $gte: startDate }
+      })
+        .populate('stationId', 'name address')
+        .sort({ createdAt: -1 })
+        .limit(10)
+    ]);
+
+    const analytics = {
+      period: `${periodDays} days`,
+      summary: {
+        totalReservations,
+        completedReservations,
+        cancelledReservations,
+        completionRate: totalReservations > 0 ? (completedReservations / totalReservations * 100).toFixed(1) : 0,
+        totalSpent: totalSpent[0]?.total || 0,
+        averageSpent: completedReservations > 0 ? ((totalSpent[0]?.total || 0) / completedReservations).toFixed(2) : 0
+      },
+      breakdown: {
+        byStatus: reservationsByStatus.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        byConnectorType: reservationsByConnectorType.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {})
+      },
+      recentActivity
+    };
+
+    sendSuccess(res, 'Reservation analytics retrieved successfully', analytics);
+  } catch (error) {
+    console.error('Error fetching reservation analytics:', error);
+    sendError(res, 'Failed to fetch reservation analytics');
+  }
+};
+
+// Get all reservations with advanced filtering (admin function)
+export const getAllReservations = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const {
+      status,
+      stationId,
+      userId: filterUserId,
+      connectorType,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query as any;
+
+    const query: any = {};
+
+    // Apply filters
+    if (status) query.status = status;
+    if (stationId) query.stationId = stationId;
+    if (filterUserId) query.userId = filterUserId;
+    if (connectorType) query.connectorType = connectorType;
+
+    if (startDate || endDate) {
+      query.startTime = {};
+      if (startDate) query.startTime.$gte = new Date(startDate);
+      if (endDate) query.startTime.$lte = new Date(endDate);
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build sort object
+    const sort: any = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    const [reservations, total] = await Promise.all([
+      Reservation.find(query)
+        .populate('userId', 'name email')
+        .populate('stationId', 'name address location')
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum),
+      Reservation.countDocuments(query)
+    ]);
+
+    const pagination = calculatePagination(pageNum, limitNum, total);
+
+    sendSuccess(res, 'All reservations retrieved successfully', reservations, 200, pagination);
+  } catch (error) {
+    console.error('Error fetching all reservations:', error);
+    sendError(res, 'Failed to fetch reservations');
+  }
 }; 

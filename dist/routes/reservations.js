@@ -36,7 +36,32 @@ const queryValidation = [
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
     (0, express_validator_1.query)('date').optional().isISO8601().withMessage('Invalid date format')
 ];
+const availabilityValidation = [
+    (0, express_validator_1.query)('stationId').isMongoId().withMessage('Invalid station ID'),
+    (0, express_validator_1.query)('connectorType').isIn(['CCS', 'CHAdeMO', 'Type2', 'Tesla', 'J1772']).withMessage('Invalid connector type'),
+    (0, express_validator_1.query)('startTime').isISO8601().withMessage('Invalid start time format'),
+    (0, express_validator_1.query)('endTime').isISO8601().withMessage('Invalid end time format')
+];
+const analyticsValidation = [
+    (0, express_validator_1.query)('period').optional().isInt({ min: 1, max: 365 }).withMessage('Period must be between 1 and 365 days')
+];
+const adminQueryValidation = [
+    (0, express_validator_1.query)('status').optional().isIn(['pending', 'confirmed', 'active', 'completed', 'cancelled']).withMessage('Invalid status'),
+    (0, express_validator_1.query)('stationId').optional().isMongoId().withMessage('Invalid station ID'),
+    (0, express_validator_1.query)('userId').optional().isMongoId().withMessage('Invalid user ID'),
+    (0, express_validator_1.query)('connectorType').optional().isIn(['CCS', 'CHAdeMO', 'Type2', 'Tesla', 'J1772']).withMessage('Invalid connector type'),
+    (0, express_validator_1.query)('startDate').optional().isISO8601().withMessage('Invalid start date format'),
+    (0, express_validator_1.query)('endDate').optional().isISO8601().withMessage('Invalid end date format'),
+    (0, express_validator_1.query)('page').optional().isInt({ min: 1 }).withMessage('Page must be at least 1'),
+    (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+    (0, express_validator_1.query)('sortBy').optional().isIn(['createdAt', 'startTime', 'endTime', 'status', 'estimatedCost']).withMessage('Invalid sort field'),
+    (0, express_validator_1.query)('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Sort order must be asc or desc')
+];
 router.use(auth_1.authenticateToken);
+router.get('/availability', availabilityValidation, reservationController_1.checkAvailability);
+router.get('/active', reservationController_1.getActiveReservations);
+router.get('/analytics', analyticsValidation, reservationController_1.getReservationAnalytics);
+router.get('/admin/all', adminQueryValidation, reservationController_1.getAllReservations);
 router.get('/', queryValidation, reservationController_1.getUserReservations);
 router.post('/', reservationValidation, reservationController_1.createReservation);
 router.get('/:id', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.getReservationById);
