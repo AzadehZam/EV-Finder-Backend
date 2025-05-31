@@ -265,4 +265,96 @@ export const getNearbyStations = async (req: Request, res: Response): Promise<vo
     console.error('Error fetching nearby stations:', error);
     sendError(res, 'Failed to fetch nearby stations');
   }
+};
+
+// Get all charging stations
+export const getAllStations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      city,
+      state,
+      connectorType,
+      status = 'active'
+    } = req.query as any;
+
+    const query: any = { status };
+
+    // Add filters
+    if (city) {
+      query['address.city'] = new RegExp(city, 'i');
+    }
+    if (state) {
+      query['address.state'] = new RegExp(state, 'i');
+    }
+    if (connectorType) {
+      query['connectorTypes.type'] = connectorType;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [stations, total] = await Promise.all([
+      ChargingStation.find(query)
+        .select('name address location connectorTypes totalPorts availablePorts pricing amenities rating status')
+        .sort({ rating: -1, name: 1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      ChargingStation.countDocuments(query)
+    ]);
+
+    const pagination = {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      totalItems: total,
+      itemsPerPage: parseInt(limit),
+      hasNext: skip + stations.length < total,
+      hasPrev: parseInt(page) > 1
+    };
+
+    sendSuccess(res, 'Charging stations retrieved successfully', {
+      stations,
+      pagination
+    });
+  } catch (error) {
+    console.error('Error fetching charging stations:', error);
+    sendError(res, 'Failed to fetch charging stations');
+  }
+};
+
+// Search stations near location
+export const searchNearbyStations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      latitude,
+      longitude,
+      radius = 10000, // 10km default
+      limit = 20
+    } = req.query as any;
+
+    if (!latitude || !longitude) {
+      sendError(res, 'Latitude and longitude are required', 400);
+      return;
+    }
+
+    const stations = await ChargingStation.find({
+      status: 'active',
+      location: {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(longitude), parseFloat(latitude)]
+          },
+          $maxDistance: parseInt(radius)
+        }
+      }
+    })
+      .select('name address location connectorTypes totalPorts availablePorts pricing amenities rating')
+      .limit(parseInt(limit));
+
+    sendSuccess(res, 'Nearby stations retrieved successfully', stations);
+  } catch (error) {
+    console.error('Error searching nearby stations:', error);
+    sendError(res, 'Failed to search nearby stations');
+  }
 }; 

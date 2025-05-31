@@ -4,6 +4,7 @@ import Reservation from '../models/Reservation';
 import ChargingStation from '../models/ChargingStation';
 import { AuthenticatedRequest } from '../types';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, calculatePagination } from '../utils/response';
+import mongoose from 'mongoose';
 
 // Get user's reservations
 export const getUserReservations = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -77,6 +78,18 @@ export const createReservation = async (req: AuthenticatedRequest, res: Response
       vehicleInfo,
       notes
     } = req.body;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(stationId)) {
+      sendError(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+      return;
+    }
+
+    // Validate required fields
+    if (!stationId || !connectorType || !startTime || !endTime) {
+      sendError(res, 'Missing required fields: stationId, connectorType, startTime, endTime', 400);
+      return;
+    }
 
     // Validate station exists and is active
     const station = await ChargingStation.findById(stationId);
@@ -412,10 +425,16 @@ export const checkAvailability = async (req: AuthenticatedRequest, res: Response
       return;
     }
 
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(stationId)) {
+      sendError(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+      return;
+    }
+
     // Validate station exists
     const station = await ChargingStation.findById(stationId);
     if (!station || station.status !== 'active') {
-      sendError(res, 'Charging station not available', 404);
+      sendError(res, 'Charging station not found or not available', 404);
       return;
     }
 
@@ -453,6 +472,13 @@ export const checkAvailability = async (req: AuthenticatedRequest, res: Response
     sendSuccess(res, 'Availability checked successfully', availabilityData);
   } catch (error) {
     console.error('Error checking availability:', error);
+    
+    // Handle specific MongoDB cast errors
+    if (error instanceof mongoose.Error.CastError) {
+      sendError(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+      return;
+    }
+    
     sendError(res, 'Failed to check availability');
   }
 };
