@@ -190,6 +190,9 @@ ChargingStationSchema.virtual('averageRating').get(function() {
 
 // Virtual for total available power
 ChargingStationSchema.virtual('totalAvailablePower').get(function(this: IChargingStation) {
+  if (!this.connectorTypes || !Array.isArray(this.connectorTypes)) {
+    return 0;
+  }
   return this.connectorTypes.reduce((total: number, connector) => {
     return total + (connector.power * connector.available);
   }, 0);
@@ -197,9 +200,13 @@ ChargingStationSchema.virtual('totalAvailablePower').get(function(this: IChargin
 
 // Pre-save middleware to update availablePorts
 ChargingStationSchema.pre('save', function(this: IChargingStation, next) {
-  this.availablePorts = this.connectorTypes.reduce((total: number, connector) => {
-    return total + connector.available;
-  }, 0);
+  if (!this.connectorTypes || !Array.isArray(this.connectorTypes)) {
+    this.availablePorts = 0;
+  } else {
+    this.availablePorts = this.connectorTypes.reduce((total: number, connector) => {
+      return total + connector.available;
+    }, 0);
+  }
   next();
 });
 

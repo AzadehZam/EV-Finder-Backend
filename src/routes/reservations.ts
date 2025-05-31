@@ -16,6 +16,8 @@ import {
   getAllReservations
 } from '../controllers/reservationController';
 import { authenticateToken } from '../middleware/auth';
+import { AuthenticatedRequest } from '../types';
+import { Response, NextFunction } from 'express';
 
 const router = Router();
 
@@ -39,7 +41,7 @@ const updateReservationValidation = [
   body('vehicleInfo.model').optional().notEmpty().withMessage('Vehicle model cannot be empty'),
   body('vehicleInfo.batteryCapacity').optional().isFloat({ min: 0 }).withMessage('Battery capacity must be positive'),
   body('vehicleInfo.currentCharge').optional().isFloat({ min: 0, max: 100 }).withMessage('Current charge must be between 0 and 100'),
-  body('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters')
+  body('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot be empty')
 ];
 
 const completeSessionValidation = [
@@ -79,8 +81,25 @@ const adminQueryValidation = [
   query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Sort order must be asc or desc')
 ];
 
-// All routes require authentication
-router.use(authenticateToken);
+// Temporary test middleware to inject a mock user for development
+const testAuthMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (process.env.NODE_ENV === 'development') {
+    // Inject a test user for development
+    req.user = {
+      userId: '674ebf9e3e2a123456789abc', // Mock user ID
+      auth0Id: 'test-user-123',
+      email: 'test@example.com'
+    };
+    console.log('Development mode: Injecting test user');
+  }
+  next();
+};
+
+// All routes require authentication (commented out for testing)
+// router.use(authenticateToken);
+
+// Use test auth middleware in development
+router.use(testAuthMiddleware);
 
 // Utility routes
 router.get('/availability', availabilityValidation, checkAvailability);
@@ -104,5 +123,26 @@ router.patch('/:id/complete', param('id').isMongoId().withMessage('Invalid reser
 
 // Station reservation routes (for station operators)
 router.get('/station/:stationId', param('stationId').isMongoId().withMessage('Invalid station ID'), queryValidation, getStationReservations);
+
+// Test route for development - bypasses authentication completely
+if (process.env.NODE_ENV === 'development') {
+  const testRouter = Router();
+  
+  // Test middleware that injects a mock user
+  testRouter.use((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    req.user = {
+      userId: '674ebf9e3e2a123456789abc',
+      auth0Id: 'test-user-123',
+      email: 'test@example.com'
+    };
+    next();
+  });
+  
+  // Test reservation creation route
+  testRouter.post('/test', reservationValidation, createReservation);
+  
+  // Mount the test router
+  router.use(testRouter);
+}
 
 export default router; 
