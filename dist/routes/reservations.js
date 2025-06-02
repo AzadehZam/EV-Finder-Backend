@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const reservationController_1 = require("../controllers/reservationController");
+const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const reservationValidation = [
     (0, express_validator_1.body)('stationId').isMongoId().withMessage('Invalid station ID'),
@@ -67,7 +68,12 @@ const testAuthMiddleware = (req, res, next) => {
     }
     next();
 };
-router.use(testAuthMiddleware);
+if (process.env.NODE_ENV === 'development') {
+    router.use(testAuthMiddleware);
+}
+else {
+    router.use(auth_1.authenticateToken);
+}
 router.get('/availability', availabilityValidation, reservationController_1.checkAvailability);
 router.get('/active', reservationController_1.getActiveReservations);
 router.get('/analytics', analyticsValidation, reservationController_1.getReservationAnalytics);
