@@ -98,8 +98,12 @@ const testAuthMiddleware = (req: AuthenticatedRequest, res: Response, next: Next
 // All routes require authentication (commented out for testing)
 // router.use(authenticateToken);
 
-// Use test auth middleware in development
-router.use(testAuthMiddleware);
+// Use test auth middleware in development, real auth in production
+if (process.env.NODE_ENV === 'development') {
+  router.use(testAuthMiddleware);
+} else {
+  router.use(authenticateToken);
+}
 
 // Utility routes
 router.get('/availability', availabilityValidation, checkAvailability);
