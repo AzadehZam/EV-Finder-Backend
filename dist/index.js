@@ -48,6 +48,14 @@ app.get('/health', (req, res) => {
         environment: process.env.NODE_ENV || 'development'
     });
 });
+app.get('/test', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Test endpoint working',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 app.use('/api/stations', stations_1.default);
 app.use('/api/reservations', reservations_1.default);
 app.use('/api/users', users_1.default);

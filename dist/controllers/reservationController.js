@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const Reservation_1 = __importDefault(require("../models/Reservation"));
 const ChargingStation_1 = __importDefault(require("../models/ChargingStation"));
 const response_1 = require("../utils/response");
+const mongoose_1 = __importDefault(require("mongoose"));
 const getUserReservations = async (req, res) => {
     try {
         const { userId } = req.user;
@@ -63,6 +64,14 @@ const createReservation = async (req, res) => {
         }
         const { userId } = req.user;
         const { stationId, connectorType, startTime, endTime, vehicleInfo, notes } = req.body;
+        if (!mongoose_1.default.Types.ObjectId.isValid(stationId)) {
+            (0, response_1.sendError)(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+            return;
+        }
+        if (!stationId || !connectorType || !startTime || !endTime) {
+            (0, response_1.sendError)(res, 'Missing required fields: stationId, connectorType, startTime, endTime', 400);
+            return;
+        }
         const station = await ChargingStation_1.default.findById(stationId);
         if (!station || station.status !== 'active') {
             (0, response_1.sendError)(res, 'Charging station not available', 404);
@@ -319,9 +328,13 @@ const checkAvailability = async (req, res) => {
             (0, response_1.sendError)(res, 'Missing required parameters: stationId, connectorType, startTime, endTime', 400);
             return;
         }
+        if (!mongoose_1.default.Types.ObjectId.isValid(stationId)) {
+            (0, response_1.sendError)(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+            return;
+        }
         const station = await ChargingStation_1.default.findById(stationId);
         if (!station || station.status !== 'active') {
-            (0, response_1.sendError)(res, 'Charging station not available', 404);
+            (0, response_1.sendError)(res, 'Charging station not found or not available', 404);
             return;
         }
         const connector = station.connectorTypes.find(c => c.type === connectorType);
@@ -348,6 +361,10 @@ const checkAvailability = async (req, res) => {
     }
     catch (error) {
         console.error('Error checking availability:', error);
+        if (error instanceof mongoose_1.default.Error.CastError) {
+            (0, response_1.sendError)(res, 'Invalid station ID format. Please provide a valid station ID.', 400);
+            return;
+        }
         (0, response_1.sendError)(res, 'Failed to check availability');
     }
 };

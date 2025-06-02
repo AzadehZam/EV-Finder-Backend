@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getNearbyStations = exports.updateStationAvailability = exports.deleteStation = exports.updateStation = exports.createStation = exports.getStationById = exports.getStations = void 0;
+exports.searchNearbyStations = exports.getAllStations = exports.getNearbyStations = exports.updateStationAvailability = exports.deleteStation = exports.updateStation = exports.createStation = exports.getStationById = exports.getStations = void 0;
 const express_validator_1 = require("express-validator");
 const ChargingStation_1 = __importDefault(require("../models/ChargingStation"));
 const response_1 = require("../utils/response");
@@ -209,4 +209,74 @@ const getNearbyStations = async (req, res) => {
     }
 };
 exports.getNearbyStations = getNearbyStations;
+const getAllStations = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, city, state, connectorType, status = 'active' } = req.query;
+        const query = { status };
+        if (city) {
+            query['address.city'] = new RegExp(city, 'i');
+        }
+        if (state) {
+            query['address.state'] = new RegExp(state, 'i');
+        }
+        if (connectorType) {
+            query['connectorTypes.type'] = connectorType;
+        }
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const [stations, total] = await Promise.all([
+            ChargingStation_1.default.find(query)
+                .select('name address location connectorTypes totalPorts availablePorts pricing amenities rating status')
+                .sort({ rating: -1, name: 1 })
+                .skip(skip)
+                .limit(parseInt(limit)),
+            ChargingStation_1.default.countDocuments(query)
+        ]);
+        const pagination = {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / parseInt(limit)),
+            totalItems: total,
+            itemsPerPage: parseInt(limit),
+            hasNext: skip + stations.length < total,
+            hasPrev: parseInt(page) > 1
+        };
+        (0, response_1.sendSuccess)(res, 'Charging stations retrieved successfully', {
+            stations,
+            pagination
+        });
+    }
+    catch (error) {
+        console.error('Error fetching charging stations:', error);
+        (0, response_1.sendError)(res, 'Failed to fetch charging stations');
+    }
+};
+exports.getAllStations = getAllStations;
+const searchNearbyStations = async (req, res) => {
+    try {
+        const { latitude, longitude, radius = 10000, limit = 20 } = req.query;
+        if (!latitude || !longitude) {
+            (0, response_1.sendError)(res, 'Latitude and longitude are required', 400);
+            return;
+        }
+        const stations = await ChargingStation_1.default.find({
+            status: 'active',
+            location: {
+                $near: {
+                    $geometry: {
+                        type: 'Point',
+                        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+                    },
+                    $maxDistance: parseInt(radius)
+                }
+            }
+        })
+            .select('name address location connectorTypes totalPorts availablePorts pricing amenities rating')
+            .limit(parseInt(limit));
+        (0, response_1.sendSuccess)(res, 'Nearby stations retrieved successfully', stations);
+    }
+    catch (error) {
+        console.error('Error searching nearby stations:', error);
+        (0, response_1.sendError)(res, 'Failed to search nearby stations');
+    }
+};
+exports.searchNearbyStations = searchNearbyStations;
 //# sourceMappingURL=stationController.js.map

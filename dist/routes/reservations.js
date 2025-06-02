@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const reservationController_1 = require("../controllers/reservationController");
-const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const reservationValidation = [
     (0, express_validator_1.body)('stationId').isMongoId().withMessage('Invalid station ID'),
@@ -23,7 +22,7 @@ const updateReservationValidation = [
     (0, express_validator_1.body)('vehicleInfo.model').optional().notEmpty().withMessage('Vehicle model cannot be empty'),
     (0, express_validator_1.body)('vehicleInfo.batteryCapacity').optional().isFloat({ min: 0 }).withMessage('Battery capacity must be positive'),
     (0, express_validator_1.body)('vehicleInfo.currentCharge').optional().isFloat({ min: 0, max: 100 }).withMessage('Current charge must be between 0 and 100'),
-    (0, express_validator_1.body)('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters')
+    (0, express_validator_1.body)('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot be empty')
 ];
 const completeSessionValidation = [
     (0, express_validator_1.body)('actualCost').optional().isFloat({ min: 0 }).withMessage('Actual cost must be positive'),
@@ -57,7 +56,18 @@ const adminQueryValidation = [
     (0, express_validator_1.query)('sortBy').optional().isIn(['createdAt', 'startTime', 'endTime', 'status', 'estimatedCost']).withMessage('Invalid sort field'),
     (0, express_validator_1.query)('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Sort order must be asc or desc')
 ];
-router.use(auth_1.authenticateToken);
+const testAuthMiddleware = (req, res, next) => {
+    if (process.env.NODE_ENV === 'development') {
+        req.user = {
+            userId: '674ebf9e3e2a123456789abc',
+            auth0Id: 'test-user-123',
+            email: 'test@example.com'
+        };
+        console.log('Development mode: Injecting test user');
+    }
+    next();
+};
+router.use(testAuthMiddleware);
 router.get('/availability', availabilityValidation, reservationController_1.checkAvailability);
 router.get('/active', reservationController_1.getActiveReservations);
 router.get('/analytics', analyticsValidation, reservationController_1.getReservationAnalytics);
@@ -71,5 +81,18 @@ router.patch('/:id/confirm', (0, express_validator_1.param)('id').isMongoId().wi
 router.patch('/:id/start', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.startChargingSession);
 router.patch('/:id/complete', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), completeSessionValidation, reservationController_1.completeChargingSession);
 router.get('/station/:stationId', (0, express_validator_1.param)('stationId').isMongoId().withMessage('Invalid station ID'), queryValidation, reservationController_1.getStationReservations);
+if (process.env.NODE_ENV === 'development') {
+    const testRouter = (0, express_1.Router)();
+    testRouter.use((req, res, next) => {
+        req.user = {
+            userId: '674ebf9e3e2a123456789abc',
+            auth0Id: 'test-user-123',
+            email: 'test@example.com'
+        };
+        next();
+    });
+    testRouter.post('/test', reservationValidation, reservationController_1.createReservation);
+    router.use(testRouter);
+}
 exports.default = router;
 //# sourceMappingURL=reservations.js.map

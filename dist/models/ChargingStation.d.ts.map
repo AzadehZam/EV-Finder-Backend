@@ -1,1 +1,1 @@
-{"version":3,"file":"ChargingStation.d.ts","sourceRoot":"","sources":["../../src/models/ChargingStation.ts"],"names":[],"mappings":"AAAA,OAAO,QAAoB,MAAM,UAAU,CAAC;AAC5C,OAAO,EAAE,gBAAgB,EAAE,MAAM,UAAU,CAAC;;;;;;AAgN5C,wBAA0F"}
+{"version":3,"file":"ChargingStation.d.ts","sourceRoot":"","sources":["../../src/models/ChargingStation.ts"],"names":[],"mappings":"AAAA,OAAO,QAAoB,MAAM,UAAU,CAAC;AAC5C,OAAO,EAAE,gBAAgB,EAAE,MAAM,UAAU,CAAC;;;;;;AAuN5C,wBAA0F"}

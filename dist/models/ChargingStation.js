@@ -214,14 +214,22 @@ ChargingStationSchema.virtual('averageRating').get(function () {
     return this.rating;
 });
 ChargingStationSchema.virtual('totalAvailablePower').get(function () {
+    if (!this.connectorTypes || !Array.isArray(this.connectorTypes)) {
+        return 0;
+    }
     return this.connectorTypes.reduce((total, connector) => {
         return total + (connector.power * connector.available);
     }, 0);
 });
 ChargingStationSchema.pre('save', function (next) {
-    this.availablePorts = this.connectorTypes.reduce((total, connector) => {
-        return total + connector.available;
-    }, 0);
+    if (!this.connectorTypes || !Array.isArray(this.connectorTypes)) {
+        this.availablePorts = 0;
+    }
+    else {
+        this.availablePorts = this.connectorTypes.reduce((total, connector) => {
+            return total + connector.available;
+        }, 0);
+    }
     next();
 });
 ChargingStationSchema.set('toJSON', { virtuals: true });
