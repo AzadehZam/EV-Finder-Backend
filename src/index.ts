@@ -65,14 +65,34 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Test endpoint for debugging
+// Simple test endpoint (no MongoDB dependency)
 app.get('/test', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Test endpoint working',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    message: 'Backend is running',
+    port: process.env.PORT || 'not set',
+    environment: process.env.NODE_ENV || 'development',
+    mongodb_uri_configured: !!process.env.MONGODB_URI,
+    timestamp: new Date().toISOString()
   });
+});
+
+// MongoDB connection test endpoint
+app.get('/db-test', (req, res) => {
+  try {
+    res.status(200).json({
+      success: true,
+      message: 'Database endpoint reached',
+      mongodb_uri: process.env.MONGODB_URI ? 'configured' : 'missing',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Database test failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // API routes
