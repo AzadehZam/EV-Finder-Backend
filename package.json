@@ -27,16 +27,16 @@
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "express-validator": "^7.0.1",
-    "express-rate-limit": "^7.1.5"
-  },
-  "devDependencies": {
+    "express-rate-limit": "^7.1.5",
     "typescript": "^5.3.3",
     "@types/node": "^20.10.5",
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/morgan": "^1.9.9",
     "@types/bcryptjs": "^2.4.6",
-    "@types/jsonwebtoken": "^9.0.5",
+    "@types/jsonwebtoken": "^9.0.5"
+  },
+  "devDependencies": {
     "ts-node": "^10.9.2",
     "nodemon": "^3.0.2"
   }
