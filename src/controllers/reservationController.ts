@@ -267,6 +267,34 @@ export const cancelReservation = async (req: AuthenticatedRequest, res: Response
   }
 };
 
+// Permanently delete reservation (only for completed or cancelled reservations)
+export const deleteReservation = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as any;
+    const { userId } = req.user!;
+
+    const reservation = await Reservation.findOne({ _id: id, userId });
+    if (!reservation) {
+      sendNotFound(res, 'Reservation');
+      return;
+    }
+
+    // Only allow deletion of completed or cancelled reservations
+    if (!['completed', 'cancelled'].includes(reservation.status)) {
+      sendError(res, 'Only completed or cancelled reservations can be deleted', 400);
+      return;
+    }
+
+    // Permanently delete the reservation from database
+    await Reservation.findByIdAndDelete(id);
+
+    sendSuccess(res, 'Reservation deleted successfully', { deletedId: id });
+  } catch (error) {
+    console.error('Error deleting reservation:', error);
+    sendError(res, 'Failed to delete reservation');
+  }
+};
+
 // Confirm reservation (admin or system)
 export const confirmReservation = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {

@@ -6,6 +6,7 @@ import {
   createReservation,
   updateReservation,
   cancelReservation,
+  deleteReservation,
   confirmReservation,
   startChargingSession,
   completeChargingSession,
@@ -119,6 +120,7 @@ router.post('/', reservationValidation, createReservation);
 router.get('/:id', param('id').isMongoId().withMessage('Invalid reservation ID'), getReservationById);
 router.put('/:id', param('id').isMongoId().withMessage('Invalid reservation ID'), updateReservationValidation, updateReservation);
 router.delete('/:id', param('id').isMongoId().withMessage('Invalid reservation ID'), cancelReservation);
+router.delete('/:id/delete', param('id').isMongoId().withMessage('Invalid reservation ID'), deleteReservation);
 
 // Reservation management routes
 router.patch('/:id/confirm', param('id').isMongoId().withMessage('Invalid reservation ID'), confirmReservation);

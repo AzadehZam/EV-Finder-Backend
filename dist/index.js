@@ -23,6 +23,14 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 app.use((0, cors_1.default)(corsOptions));
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'EV Finder API is running',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 const limiter = (0, express_rate_limit_1.default)({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
@@ -40,21 +48,41 @@ if (process.env.NODE_ENV !== 'production') {
 else {
     app.use((0, morgan_1.default)('combined'));
 }
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
     res.status(200).json({
         success: true,
-        message: 'EV Finder API is running',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        message: 'EV Finder Backend API',
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString()
     });
 });
 app.get('/test', (req, res) => {
     res.status(200).json({
         success: true,
-        message: 'Test endpoint working',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        message: 'Backend is running',
+        port: process.env.PORT || 'not set',
+        environment: process.env.NODE_ENV || 'development',
+        mongodb_uri_configured: !!process.env.MONGODB_URI,
+        timestamp: new Date().toISOString()
     });
+});
+app.get('/db-test', (req, res) => {
+    try {
+        res.status(200).json({
+            success: true,
+            message: 'Database endpoint reached',
+            mongodb_uri: process.env.MONGODB_URI ? 'configured' : 'missing',
+            timestamp: new Date().toISOString()
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Database test failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 });
 app.use('/api/stations', stations_1.default);
 app.use('/api/reservations', reservations_1.default);

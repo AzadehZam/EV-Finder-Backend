@@ -5,6 +5,7 @@ export declare const getReservationById: (req: AuthenticatedRequest, res: Respon
 export declare const createReservation: (req: AuthenticatedRequest, res: Response) => Promise<void>;
 export declare const updateReservation: (req: AuthenticatedRequest, res: Response) => Promise<void>;
 export declare const cancelReservation: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+export declare const deleteReservation: (req: AuthenticatedRequest, res: Response) => Promise<void>;
 export declare const confirmReservation: (req: AuthenticatedRequest, res: Response) => Promise<void>;
 export declare const startChargingSession: (req: AuthenticatedRequest, res: Response) => Promise<void>;
 export declare const completeChargingSession: (req: AuthenticatedRequest, res: Response) => Promise<void>;

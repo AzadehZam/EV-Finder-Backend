@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllReservations = exports.getReservationAnalytics = exports.getActiveReservations = exports.checkAvailability = exports.getStationReservations = exports.completeChargingSession = exports.startChargingSession = exports.confirmReservation = exports.cancelReservation = exports.updateReservation = exports.createReservation = exports.getReservationById = exports.getUserReservations = void 0;
+exports.getAllReservations = exports.getReservationAnalytics = exports.getActiveReservations = exports.checkAvailability = exports.getStationReservations = exports.completeChargingSession = exports.startChargingSession = exports.confirmReservation = exports.deleteReservation = exports.cancelReservation = exports.updateReservation = exports.createReservation = exports.getReservationById = exports.getUserReservations = void 0;
 const express_validator_1 = require("express-validator");
 const Reservation_1 = __importDefault(require("../models/Reservation"));
 const ChargingStation_1 = __importDefault(require("../models/ChargingStation"));
@@ -197,6 +197,28 @@ const cancelReservation = async (req, res) => {
     }
 };
 exports.cancelReservation = cancelReservation;
+const deleteReservation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId } = req.user;
+        const reservation = await Reservation_1.default.findOne({ _id: id, userId });
+        if (!reservation) {
+            (0, response_1.sendNotFound)(res, 'Reservation');
+            return;
+        }
+        if (!['completed', 'cancelled'].includes(reservation.status)) {
+            (0, response_1.sendError)(res, 'Only completed or cancelled reservations can be deleted', 400);
+            return;
+        }
+        await Reservation_1.default.findByIdAndDelete(id);
+        (0, response_1.sendSuccess)(res, 'Reservation deleted successfully', { deletedId: id });
+    }
+    catch (error) {
+        console.error('Error deleting reservation:', error);
+        (0, response_1.sendError)(res, 'Failed to delete reservation');
+    }
+};
+exports.deleteReservation = deleteReservation;
 const confirmReservation = async (req, res) => {
     try {
         const { id } = req.params;

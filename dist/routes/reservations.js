@@ -83,6 +83,7 @@ router.post('/', reservationValidation, reservationController_1.createReservatio
 router.get('/:id', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.getReservationById);
 router.put('/:id', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), updateReservationValidation, reservationController_1.updateReservation);
 router.delete('/:id', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.cancelReservation);
+router.delete('/:id/delete', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.deleteReservation);
 router.patch('/:id/confirm', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.confirmReservation);
 router.patch('/:id/start', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), reservationController_1.startChargingSession);
 router.patch('/:id/complete', (0, express_validator_1.param)('id').isMongoId().withMessage('Invalid reservation ID'), completeSessionValidation, reservationController_1.completeChargingSession);
